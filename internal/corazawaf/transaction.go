@@ -1445,6 +1445,7 @@ func (tx *Transaction) Close() error {
 		errs = append(errs, err)
 	}
 
+	tx.matchedRules = nil
 	if tx.IsInterrupted() {
 		tx.debugLogger.Debug().
 			Bool("is_interrupted", tx.IsInterrupted()).
