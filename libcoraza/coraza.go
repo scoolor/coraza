@@ -28,13 +28,14 @@ void send_log_to_cb(coraza_log_cb cb, const char *msg);
 import "C"
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"reflect"
 	"unsafe"
 
 	"github.com/corazawaf/coraza/v3"
-
+	"github.com/corazawaf/coraza/v3/internal/corazawaf"
 	"github.com/corazawaf/coraza/v3/types"
 )
 
@@ -45,10 +46,9 @@ type MessageData struct {
 	Message   string             `json:"message"`
 	ID_       int                `json:"id"`
 	Rev_      string             `json:"rev"`
-	Msg_      string             `json:"msg"`
-	Data_     string             `json:"data"`
-	Severity_ types.RuleSeverity `json:"severity"`
 	Ver_      string             `json:"ver"`
+	Data_     []string           `json:"data"`
+	Severity_ types.RuleSeverity `json:"severity"`
 	Maturity_ int                `json:"maturity"`
 	Accuracy_ int                `json:"accuracy"`
 	Tags_     []string           `json:"tags"`
@@ -318,11 +318,16 @@ func coraza_free_waf(t C.coraza_waf_t) C.int {
 func coraza_set_log_cb(waf C.coraza_waf_t, cb C.coraza_log_cb) {
 }
 
-//export coraza_get_matched_rules
-func coraza_get_matched_rules(t C.coraza_transaction_t) *C.char {
+/**
+ * 获取匹配到的规则log日志，这里只返回规则中非nolog的日志。调用完成后记得调用coraza_free_matched_logmsg方法去free掉。
+ * 如果匹配到的内容为空，那么返回""
+ * @returns pointer to logmsg
+ */
+//export coraza_get_matched_logmsg
+func coraza_get_matched_logmsg(t C.coraza_transaction_t) *C.char {
 	tx := ptrToTransaction(t)
 	if len(tx.MatchedRules()) == 0 {
-		return nil
+		return C.CString("")
 	}
 	// we need to build a json object with the matched rules
 	// and the corresponding data
@@ -330,30 +335,47 @@ func coraza_get_matched_rules(t C.coraza_transaction_t) *C.char {
 	var err error
 	message := make([]MessageData, 0)
 	for _, mr := range tx.MatchedRules() {
-		if mr.Message() == "" {
+		r := mr.Rule().(*corazawaf.Rule)
+		if !r.Log && !r.Audit {
+			// 说明被匹配到的规则是nolog类型，不需要返回给调用人员
 			continue
 		}
-		r := mr.Rule()
-		for _, matchData := range mr.MatchedDatas() {
-			message = append(message, MessageData{
-				Message:   mr.Message(),
-				ID_:       r.ID(),
-				Rev_:      r.Revision(),
-				Msg_:      matchData.Message(),
-				Data_:     matchData.Data(),
-				Severity_: r.Severity(),
-				Ver_:      r.Version(),
-				Maturity_: r.Maturity(),
-				Accuracy_: r.Accuracy(),
-				Tags_:     r.Tags(),
-			})
+
+		matchData := make([]string, 0, 10)
+		for _, i := range mr.MatchedDatas() {
+			matchData = append(matchData, fmt.Sprintf("%s: %s", i.Key(), i.Value()))
 		}
+		message = append(message, MessageData{
+			Message:   mr.Message(),
+			ID_:       r.ID(),
+			Rev_:      r.Revision(),
+			Ver_:      r.Version(),
+			Data_:     matchData,
+			Severity_: r.Severity(),
+			Maturity_: r.Maturity(),
+			Accuracy_: r.Accuracy(),
+			Tags_:     r.Tags(),
+		})
 	}
 	if logData, err = json.Marshal(message); err != nil {
-		return nil
+		return C.CString("")
 	}
 
 	return C.CString(string(logData))
+}
+
+/**
+ * 释放coraza_free_matched_logmsg方法得到的内存。
+ * 如果失败，返回1，成功返回0
+ * @returns pointer to logmsg
+ */
+//export coraza_free_matched_logmsg
+func coraza_free_matched_logmsg(t *C.char) C.int {
+	if t == nil {
+		return 1
+	}
+	C.free(unsafe.Pointer(t))
+	return 0
 }
 
 /*
