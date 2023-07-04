@@ -67,9 +67,9 @@ func TestCoraza_rules_add_file(t *testing.T) {
 	er := stringToC("a")
 	waf := coraza_new_waf()
 	coraza_rules_add_file(waf, stringToC(`coraza.conf`), &er)
-	coraza_rules_add(waf, stringToC(`SecRule TX:DETECTION_ANOMALY_SCORE "@eq 0" "id:980043,phase:5,pass,nolog,skipAfter:END-REPORTING"`), &er)
-	// coraza_rules_add(waf, stringToC(`SecRule REQUEST_HEADERS:User-Agent "Mozilla" "phase:1, id:3,drop,status:403,log,msg:'Blocked User-Agent'"`), &er)
-	coraza_rules_add(waf, stringToC(`Include /Users/mac/GolandProjects/libcoraza/coreruleset-4.0-dev/rules/*.conf`), &er)
+	coraza_rules_add_file(waf, stringToC(`../coreruleset/crs-setup.conf.example`), &er)
+	coraza_rules_add(waf, stringToC(`SecRule REQUEST_HEADERS:User-Agent "Mozilla" "phase:1, id:3,drop,status:403,log,msg:'Blocked User-Agent'"`), &er)
+	coraza_rules_add(waf, stringToC(`Include ../coreruleset/rules/*.conf`), &er)
 	tt := coraza_new_transaction(waf, nil)
 	if tt == 0 {
 		t.Fatal("Transaction initialization failed")
@@ -77,7 +77,7 @@ func TestCoraza_rules_add_file(t *testing.T) {
 	tx := ptrToTransaction(tt)
 	tx.ProcessConnection("127.0.0.1", 8080, "127.0.0.1", 80)
 	tx.ProcessURI("https://www.example.com/some?params=123", "GET", "HTTP/1.1")
-	tx.AddRequestHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36 Edg/111.0.1661.44")
+	tx.AddRequestHeader("User-Agent", "Mozilla")
 	tx.ProcessRequestHeaders()
 	tx.ProcessRequestBody()
 	tx.AddResponseHeader("Content-Type", "text/html")
@@ -88,6 +88,8 @@ func TestCoraza_rules_add_file(t *testing.T) {
 	if intervention.Action != "drop" {
 		t.Fatal("action was not correct")
 	}
+	m := coraza_get_matched_logmsg(tt)
+	coraza_free_matched_logmsg(m)
 }
 
 // nolint
@@ -111,7 +113,7 @@ func TestCoraza_rules_add(t *testing.T) {
 	tx.ProcessResponseBody()
 	tx.ProcessLogging()
 	intervention := tx.Interruption()
-	cStr := coraza_get_matched_rules(tt)
+	cStr := coraza_get_matched_logmsg(tt)
 	fmt.Println(cStringToGoString(cStr))
 	if intervention.Action != "drop" {
 		t.Fatal("action was not correct")
