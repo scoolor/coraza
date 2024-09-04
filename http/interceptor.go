@@ -43,6 +43,7 @@ func (i *rwInterceptor) WriteHeader(statusCode int) {
 
 	i.statusCode = statusCode
 	if it := i.tx.ProcessResponseHeaders(statusCode, i.proto); it != nil {
+		i.cleanHeaders()
 		i.Header().Set("Content-Length", "0")
 		i.statusCode = obtainStatusCodeFromInterruptionOrDefault(it, i.statusCode)
 		i.flushWriteHeader()
@@ -62,6 +63,13 @@ func (i *rwInterceptor) flushWriteHeader() {
 	if !i.isWriteHeaderFlush {
 		i.w.WriteHeader(i.statusCode)
 		i.isWriteHeaderFlush = true
+	}
+}
+
+// cleanHeaders removes all headers from the response
+func (i *rwInterceptor) cleanHeaders() {
+	for k := range i.w.Header() {
+		i.w.Header().Del(k)
 	}
 }
 
@@ -88,7 +96,10 @@ func (i *rwInterceptor) Write(b []byte) (int, error) {
 		// to it, otherwise we just send it to the response writer.
 		it, n, err := i.tx.WriteResponseBody(b)
 		if it != nil {
-			i.overrideWriteHeader(it.Status)
+			// if there is an interruption we must clean the headers and override the status code
+			i.cleanHeaders()
+			i.Header().Set("Content-Length", "0")
+			i.overrideWriteHeader(obtainStatusCodeFromInterruptionOrDefault(it, i.statusCode))
 			// We only flush the status code after an interruption.
 			i.flushWriteHeader()
 			return 0, nil
@@ -108,7 +119,23 @@ func (i *rwInterceptor) Header() http.Header {
 	return i.w.Header()
 }
 
-var _ http.ResponseWriter = (*rwInterceptor)(nil)
+func (i *rwInterceptor) ReadFrom(r io.Reader) (n int64, err error) {
+	return io.Copy(struct{ io.Writer }{i}, r)
+}
+
+func (i *rwInterceptor) Flush() {
+	if !i.wroteHeader {
+		i.WriteHeader(http.StatusOK)
+	}
+}
+
+type responseWriter interface {
+	http.ResponseWriter
+	io.ReaderFrom
+	http.Flusher
+}
+
+var _ responseWriter = (*rwInterceptor)(nil)
 
 // wrap wraps the interceptor into a response writer that also preserves
 // the http interfaces implemented by the original response writer to avoid
@@ -137,6 +164,8 @@ func wrap(w http.ResponseWriter, r *http.Request, tx types.Transaction) (
 				i.flushWriteHeader()
 				return err
 			} else if it != nil {
+				// if there is an interruption we must clean the headers and override the status code
+				i.cleanHeaders()
 				i.Header().Set("Content-Length", "0")
 				i.overrideWriteHeader(obtainStatusCodeFromInterruptionOrDefault(it, i.statusCode))
 				i.flushWriteHeader()
@@ -168,110 +197,28 @@ func wrap(w http.ResponseWriter, r *http.Request, tx types.Transaction) (
 	var (
 		hijacker, isHijacker = i.w.(http.Hijacker)
 		pusher, isPusher     = i.w.(http.Pusher)
-		flusher, isFlusher   = i.w.(http.Flusher)
-		reader, isReader     = i.w.(io.ReaderFrom)
 	)
 
 	switch {
-	case !isHijacker && !isPusher && !isFlusher && !isReader:
+	case !isHijacker && isPusher:
 		return struct {
-			http.ResponseWriter
-		}{i}, responseProcessor
-	case !isHijacker && !isPusher && !isFlusher && isReader:
-		return struct {
-			http.ResponseWriter
-			io.ReaderFrom
-		}{i, reader}, responseProcessor
-	case !isHijacker && !isPusher && isFlusher && !isReader:
-		return struct {
-			http.ResponseWriter
-			http.Flusher
-		}{i, flusher}, responseProcessor
-	case !isHijacker && !isPusher && isFlusher && isReader:
-		return struct {
-			http.ResponseWriter
-			http.Flusher
-			io.ReaderFrom
-		}{i, flusher, reader}, responseProcessor
-	case !isHijacker && isPusher && !isFlusher && !isReader:
-		return struct {
-			http.ResponseWriter
+			responseWriter
 			http.Pusher
 		}{i, pusher}, responseProcessor
-	case !isHijacker && isPusher && !isFlusher && isReader:
+	case isHijacker && !isPusher:
 		return struct {
-			http.ResponseWriter
-			http.Pusher
-			io.ReaderFrom
-		}{i, pusher, reader}, responseProcessor
-	case !isHijacker && isPusher && isFlusher && !isReader:
-		return struct {
-			http.ResponseWriter
-			http.Pusher
-			http.Flusher
-		}{i, pusher, flusher}, responseProcessor
-	case !isHijacker && isPusher && isFlusher && isReader:
-		return struct {
-			http.ResponseWriter
-			http.Pusher
-			http.Flusher
-			io.ReaderFrom
-		}{i, pusher, flusher, reader}, responseProcessor
-	case isHijacker && !isPusher && !isFlusher && !isReader:
-		return struct {
-			http.ResponseWriter
+			responseWriter
 			http.Hijacker
 		}{i, hijacker}, responseProcessor
-	case isHijacker && !isPusher && !isFlusher && isReader:
+	case isHijacker && isPusher:
 		return struct {
-			http.ResponseWriter
-			http.Hijacker
-			io.ReaderFrom
-		}{i, hijacker, reader}, responseProcessor
-	case isHijacker && !isPusher && isFlusher && !isReader:
-		return struct {
-			http.ResponseWriter
-			http.Hijacker
-			http.Flusher
-		}{i, hijacker, flusher}, responseProcessor
-	case isHijacker && !isPusher && isFlusher && isReader:
-		return struct {
-			http.ResponseWriter
-			http.Hijacker
-			http.Flusher
-			io.ReaderFrom
-		}{i, hijacker, flusher, reader}, responseProcessor
-	case isHijacker && isPusher && !isFlusher && !isReader:
-		return struct {
-			http.ResponseWriter
+			responseWriter
 			http.Hijacker
 			http.Pusher
 		}{i, hijacker, pusher}, responseProcessor
-	case isHijacker && isPusher && !isFlusher && isReader:
-		return struct {
-			http.ResponseWriter
-			http.Hijacker
-			http.Pusher
-			io.ReaderFrom
-		}{i, hijacker, pusher, reader}, responseProcessor
-	case isHijacker && isPusher && isFlusher && !isReader:
-		return struct {
-			http.ResponseWriter
-			http.Hijacker
-			http.Pusher
-			http.Flusher
-		}{i, hijacker, pusher, flusher}, responseProcessor
-	case isHijacker && isPusher && isFlusher && isReader:
-		return struct {
-			http.ResponseWriter
-			http.Hijacker
-			http.Pusher
-			http.Flusher
-			io.ReaderFrom
-		}{i, hijacker, pusher, flusher, reader}, responseProcessor
 	default:
 		return struct {
-			http.ResponseWriter
+			responseWriter
 		}{i}, responseProcessor
 	}
 }

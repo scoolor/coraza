@@ -4,6 +4,7 @@
 package corazarules
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -30,6 +31,8 @@ type MatchData struct {
 	ChainLevel_ int
 }
 
+var _ types.MatchData = (*MatchData)(nil)
+
 func (m *MatchData) Variable() variables.RuleVariable {
 	return m.Variable_
 }
@@ -54,6 +57,26 @@ func (m *MatchData) ChainLevel() int {
 	return m.ChainLevel_
 }
 
+// ActionName is used to identify an action.
+type DisruptiveAction int
+
+const (
+	DisruptiveActionUnknown DisruptiveAction = iota
+	DisruptiveActionAllow
+	DisruptiveActionDeny
+	DisruptiveActionDrop
+	DisruptiveActionPass
+	DisruptiveActionRedirect
+)
+
+var DisruptiveActionMap = map[string]DisruptiveAction{
+	"allow":    DisruptiveActionAllow,
+	"deny":     DisruptiveActionDeny,
+	"drop":     DisruptiveActionDrop,
+	"pass":     DisruptiveActionPass,
+	"redirect": DisruptiveActionRedirect,
+}
+
 // MatchedRule contains a list of macro expanded messages,
 // matched variables and a pointer to the rule
 type MatchedRule struct {
@@ -67,6 +90,11 @@ type MatchedRule struct {
 	TransactionID_ string
 	// Is disruptive
 	Disruptive_ bool
+	// Name of the disruptive action
+	// Note: not exposed in coraza v3.0.*
+	DisruptiveAction_ DisruptiveAction
+	// Is meant to be logged
+	Log_ bool
 	// Server IP address
 	ServerIPAddress_ string
 	// Client IP address
@@ -75,7 +103,11 @@ type MatchedRule struct {
 	MatchedDatas_ []types.MatchData
 
 	Rule_ types.RuleMetadata
+
+	Context_ context.Context
 }
+
+var _ types.MatchedRule = (*MatchedRule)(nil)
 
 func (mr *MatchedRule) Message() string {
 	return mr.Message_
@@ -97,6 +129,10 @@ func (mr *MatchedRule) Disruptive() bool {
 	return mr.Disruptive_
 }
 
+func (mr *MatchedRule) Log() bool {
+	return mr.Log_
+}
+
 func (mr *MatchedRule) ServerIPAddress() string {
 	return mr.ServerIPAddress_
 }
@@ -113,7 +149,36 @@ func (mr *MatchedRule) Rule() types.RuleMetadata {
 	return mr.Rule_
 }
 
-const maxSizeLogMessage = 200
+// Context returns the context associated with the transaction
+// This is useful for logging purposes where you want to add
+// additional information to the log.
+// The context can be easily retrieved in the logger using
+// an ancillary interface:
+// ```
+//
+//	 type Contexter interface {
+//			Context() context.Context
+//		}
+//
+// ```
+// and then using it like this:
+//
+// ```
+//
+//	func errorLogCb(mr types.MatchedRule) {
+//	     ctx := context.Background()
+//		 if ctxer, ok := mr.(Contexter); ok {
+//	    	ctx = ctxer.Context()
+//		 }
+//	     logger.Context(ctx).Error().Msg("...")
+//	}
+//
+// ```
+func (mr *MatchedRule) Context() context.Context {
+	return mr.Context_
+}
+
+const maxSizeLogMessage = 280
 
 func (mr MatchedRule) writeDetails(log *strings.Builder, matchData types.MatchData) {
 	msg := matchData.Message()
@@ -175,13 +240,12 @@ func (mr MatchedRule) AuditLog() string {
 	for _, matchData := range mr.MatchedDatas_ {
 		fmt.Fprintf(log, "[client %q] ", mr.ClientIPAddress_)
 		if mr.Disruptive_ {
-			fmt.Fprintf(log, "Coraza: Access denied (phase %d). ", mr.Rule_.Phase())
+			writeDisruptiveActionSpecificLog(log, mr)
 		} else {
 			log.WriteString("Coraza: Warning. ")
 		}
 		mr.matchData(log, matchData)
 		mr.writeDetails(log, matchData)
-		log.WriteString("\n")
 	}
 	return log.String()
 }
@@ -205,7 +269,7 @@ func (mr MatchedRule) ErrorLog() string {
 
 	fmt.Fprintf(log, "[client %q] ", mr.ClientIPAddress_)
 	if mr.Disruptive_ {
-		fmt.Fprintf(log, "Coraza: Access denied (phase %d). ", mr.Rule_.Phase())
+		writeDisruptiveActionSpecificLog(log, mr)
 	} else {
 		log.WriteString("Coraza: Warning. ")
 	}
@@ -223,6 +287,22 @@ func (mr MatchedRule) ErrorLog() string {
 		}
 	}
 
-	log.WriteString("\n")
 	return log.String()
+}
+
+func writeDisruptiveActionSpecificLog(log *strings.Builder, mr MatchedRule) {
+	switch mr.DisruptiveAction_ {
+	case DisruptiveActionAllow:
+		fmt.Fprintf(log, "Coraza: Access allowed (phase %d). ", mr.Rule_.Phase())
+	case DisruptiveActionDeny:
+		fmt.Fprintf(log, "Coraza: Access denied (phase %d). ", mr.Rule_.Phase())
+	case DisruptiveActionDrop:
+		fmt.Fprintf(log, "Coraza: Access dropped (phase %d). ", mr.Rule_.Phase())
+	case DisruptiveActionPass:
+		log.WriteString("Coraza: Warning. ")
+	case DisruptiveActionRedirect:
+		fmt.Fprintf(log, "Coraza: Access redirected (phase %d). ", mr.Rule_.Phase())
+	default:
+		fmt.Fprintf(log, "Coraza: Custom disruptive action triggered (phase %d). ", mr.Rule_.Phase())
+	}
 }

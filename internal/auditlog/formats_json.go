@@ -1,10 +1,6 @@
 // Copyright 2022 Juan Pablo Tosso and the OWASP Coraza contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// JSON auditlog not supported on TinyGo yet.
-//go:build !tinygo
-// +build !tinygo
-
 package auditlog
 
 import (
@@ -15,8 +11,9 @@ import (
 	"github.com/corazawaf/coraza/v3/experimental/plugins/plugintypes"
 )
 
-// Coraza format
-func jsonFormatter(al plugintypes.AuditLog) ([]byte, error) {
+type jsonFormatter struct{}
+
+func (jsonFormatter) Format(al plugintypes.AuditLog) ([]byte, error) {
 	jsdata, err := json.Marshal(al)
 	if err != nil {
 		return nil, err
@@ -24,8 +21,13 @@ func jsonFormatter(al plugintypes.AuditLog) ([]byte, error) {
 	return jsdata, nil
 }
 
-// Coraza legacy json format
-func legacyJSONFormatter(al plugintypes.AuditLog) ([]byte, error) {
+func (jsonFormatter) MIME() string {
+	return "application/json; charset=utf-8"
+}
+
+type legacyJSONFormatter struct{}
+
+func (_ legacyJSONFormatter) Format(al plugintypes.AuditLog) ([]byte, error) {
 	al2 := logLegacy{
 		Transaction: logLegacyTransaction{
 			Time:          al.Transaction().Timestamp(),
@@ -92,7 +94,11 @@ func legacyJSONFormatter(al plugintypes.AuditLog) ([]byte, error) {
 	return jsdata, nil
 }
 
+func (_ legacyJSONFormatter) MIME() string {
+	return "application/json; charset=utf-8"
+}
+
 var (
-	_ plugintypes.AuditLogFormatter = jsonFormatter
-	_ plugintypes.AuditLogFormatter = legacyJSONFormatter
+	_ plugintypes.AuditLogFormatter = (*jsonFormatter)(nil)
+	_ plugintypes.AuditLogFormatter = (*legacyJSONFormatter)(nil)
 )

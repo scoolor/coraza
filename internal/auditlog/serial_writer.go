@@ -50,10 +50,15 @@ func (sl *serialWriter) Write(al plugintypes.AuditLog) error {
 		return nil
 	}
 
-	bts, err := sl.formatter(al)
+	bts, err := sl.formatter.Format(al)
 	if err != nil {
 		return err
 	}
+
+	if len(bts) == 0 {
+		return nil
+	}
+
 	sl.logger.Println(string(bts))
 	return nil
 }

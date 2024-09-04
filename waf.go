@@ -4,9 +4,13 @@
 package coraza
 
 import (
+	"context"
 	"fmt"
+	"strings"
 
+	"github.com/corazawaf/coraza/v3/experimental"
 	"github.com/corazawaf/coraza/v3/internal/corazawaf"
+	"github.com/corazawaf/coraza/v3/internal/environment"
 	"github.com/corazawaf/coraza/v3/internal/seclang"
 	"github.com/corazawaf/coraza/v3/types"
 )
@@ -29,6 +33,12 @@ func NewWAF(config WAFConfig) (WAF, error) {
 	c := config.(*wafConfig)
 
 	waf := corazawaf.NewWAF()
+
+	if environment.HasAccessToFS {
+		if err := environment.IsDirWritable(waf.TmpDir); err != nil {
+			return nil, fmt.Errorf("filesystem access check: %w. Use 'no_fs_access' build tag, if not available", err)
+		}
+	}
 
 	if c.debugLogger != nil {
 		waf.Logger = c.debugLogger
@@ -57,19 +67,7 @@ func NewWAF(config WAFConfig) (WAF, error) {
 		}
 	}
 
-	if a := c.auditLog; a != nil {
-		if a.relevantOnly {
-			waf.AuditEngine = types.AuditEngineRelevantOnly
-		} else {
-			waf.AuditEngine = types.AuditEngineOn
-		}
-
-		waf.AuditLogParts = a.parts
-
-		if a.writer != nil {
-			waf.SetAuditLogWriter(a.writer)
-		}
-	}
+	populateAuditLog(waf, c)
 
 	if err := waf.InitAuditLogWriter(); err != nil {
 		return nil, fmt.Errorf("invalid WAF config from audit log: %w", err)
@@ -110,6 +108,26 @@ func NewWAF(config WAFConfig) (WAF, error) {
 	return wafWrapper{waf: waf}, nil
 }
 
+func populateAuditLog(waf *corazawaf.WAF, c *wafConfig) {
+	if c.auditLog == nil {
+		return
+	}
+
+	if c.auditLog.relevantOnly {
+		waf.AuditEngine = types.AuditEngineRelevantOnly
+	} else {
+		waf.AuditEngine = types.AuditEngineOn
+	}
+
+	if len(c.auditLog.parts) > 0 {
+		waf.AuditLogParts = c.auditLog.parts
+	}
+
+	if c.auditLog.writer != nil {
+		waf.SetAuditLogWriter(c.auditLog.writer)
+	}
+}
+
 type wafWrapper struct {
 	waf *corazawaf.WAF
 }
@@ -121,5 +139,15 @@ func (w wafWrapper) NewTransaction() types.Transaction {
 
 // NewTransactionWithID implements the same method on WAF.
 func (w wafWrapper) NewTransactionWithID(id string) types.Transaction {
-	return w.waf.NewTransactionWithID(id)
+	id = strings.TrimSpace(id)
+	if len(id) == 0 {
+		w.waf.Logger.Warn().Msg("Empty ID passed for new transaction")
+	}
+
+	return w.waf.NewTransactionWithOptions(corazawaf.Options{Context: context.Background(), ID: id})
+}
+
+// NewTransaction implements the same method on WAF.
+func (w wafWrapper) NewTransactionWithOptions(opts experimental.Options) types.Transaction {
+	return w.waf.NewTransactionWithOptions(opts)
 }

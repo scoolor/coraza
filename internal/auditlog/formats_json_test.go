@@ -1,13 +1,11 @@
 // Copyright 2022 Juan Pablo Tosso and the OWASP Coraza contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build !tinygo
-// +build !tinygo
-
 package auditlog
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -48,9 +46,13 @@ func TestModsecBoundary(t *testing.T) {
 
 func TestLegacyFormatter(t *testing.T) {
 	al := createAuditLog()
-	data, err := legacyJSONFormatter(al)
+	f := &legacyJSONFormatter{}
+	data, err := f.Format(al)
 	if err != nil {
 		t.Error(err)
+	}
+	if !strings.Contains(f.MIME(), "json") {
+		t.Errorf("failed to match MIME, expected json and got %s", f.MIME())
 	}
 	var legacyAl logLegacy
 	if err := json.Unmarshal(data, &legacyAl); err != nil {
