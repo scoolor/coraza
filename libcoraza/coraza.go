@@ -16,6 +16,8 @@ typedef struct coraza_intervention_t
     int status;
     int pause;
     int disruptive;
+	int rule_id;
+	char *data;
 } coraza_intervention_t;
 
 typedef uint64_t coraza_waf_t;
@@ -114,24 +116,15 @@ func coraza_intervention(tx C.coraza_transaction_t) *C.coraza_intervention_t {
 	mem := (*C.coraza_intervention_t)(C.malloc(C.size_t(unsafe.Sizeof(C.coraza_intervention_t{}))))
 	mem.action = C.CString(interruption.Action)
 	mem.status = C.int(interruption.Status)
-
-	// 创建一个包含所有匹配规则的切片
-	var matchedRulesInfo []map[string]interface{}
-
-	matchedRules := t.MatchedRules()
-	for _, rule := range matchedRules {
-		ruleInfo := map[string]interface{}{
-			"id":      rule.Rule().ID(),
-			"message": rule.Message(),
-		}
-		matchedRulesInfo = append(matchedRulesInfo, ruleInfo)
-	}
+	mem.rule_id = C.int(interruption.RuleID)
+	mem.data = C.CString(interruption.Data)
 
 	// 创建一个包含所有信息的map
 	interventionInfo := map[string]interface{}{
-		"action":        interruption.Action,
-		"status":        interruption.Status,
-		"matched_rules": matchedRulesInfo,
+		"action":  interruption.Action,
+		"status":  interruption.Status,
+		"rule_id": interruption.RuleID,
+		"data":    interruption.Data,
 	}
 
 	// 将map转换为JSON字符串
