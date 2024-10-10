@@ -16,8 +16,6 @@ typedef struct coraza_intervention_t
     int status;
     int pause;
     int disruptive;
-	int rule_id;
-	char *data;
 } coraza_intervention_t;
 
 typedef uint64_t coraza_waf_t;
@@ -116,8 +114,6 @@ func coraza_intervention(tx C.coraza_transaction_t) *C.coraza_intervention_t {
 	mem := (*C.coraza_intervention_t)(C.malloc(C.size_t(unsafe.Sizeof(C.coraza_intervention_t{}))))
 	mem.action = C.CString(interruption.Action)
 	mem.status = C.int(interruption.Status)
-	mem.rule_id = C.int(interruption.RuleID)
-	mem.data = C.CString(interruption.Data)
 
 	// 创建一个包含所有信息的map
 	interventionInfo := map[string]interface{}{
