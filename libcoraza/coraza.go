@@ -91,14 +91,41 @@ func coraza_new_transaction_with_id(waf C.coraza_waf_t, id *C.char, logCb unsafe
 }
 
 //export coraza_intervention
+// func coraza_intervention(tx C.coraza_transaction_t) *C.coraza_intervention_t {
+// 	t := ptrToTransaction(tx)
+// 	if t.Interruption() == nil {
+// 		return nil
+// 	}
+// 	mem := (*C.coraza_intervention_t)(C.malloc(C.size_t(unsafe.Sizeof(C.coraza_intervention_t{}))))
+// 	mem.action = C.CString(t.Interruption().Action)
+// 	mem.status = C.int(t.Interruption().Status)
+
+// 	return mem
+// }
+
+//export coraza_intervention
 func coraza_intervention(tx C.coraza_transaction_t) *C.coraza_intervention_t {
 	t := ptrToTransaction(tx)
-	if t.Interruption() == nil {
+	interruption := t.Interruption()
+	if interruption == nil {
 		return nil
 	}
+
 	mem := (*C.coraza_intervention_t)(C.malloc(C.size_t(unsafe.Sizeof(C.coraza_intervention_t{}))))
-	mem.action = C.CString(t.Interruption().Action)
-	mem.status = C.int(t.Interruption().Status)
+	mem.action = C.CString(interruption.Action)
+	mem.status = C.int(interruption.Status)
+
+	// 获取匹配到的规则信息
+	matchedRules := t.MatchedRules()
+	if len(matchedRules) > 0 {
+		// 我们只取第一个匹配的规则作为示例
+		rule := matchedRules[0]
+		logMsg := fmt.Sprintf("Rule ID: %d, Message: %s", rule.Rule().ID(), rule.Message())
+		mem.log = C.CString(logMsg)
+	} else {
+		mem.log = C.CString("No specific rule information available")
+	}
+
 	return mem
 }
 
@@ -271,9 +298,9 @@ func coraza_free_intervention(it *C.coraza_intervention_t) C.int {
 		return 1
 	}
 	defer C.free(unsafe.Pointer(it))
-	// C.free(unsafe.Pointer(it.log))
-	// C.free(unsafe.Pointer(it.url))
 	C.free(unsafe.Pointer(it.action))
+	C.free(unsafe.Pointer(it.url))
+	C.free(unsafe.Pointer(it.log))
 	return 0
 }
 
