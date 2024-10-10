@@ -115,15 +115,31 @@ func coraza_intervention(tx C.coraza_transaction_t) *C.coraza_intervention_t {
 	mem.action = C.CString(interruption.Action)
 	mem.status = C.int(interruption.Status)
 
-	// 获取匹配到的规则信息
+	// 创建一个包含所有匹配规则的切片
+	var matchedRulesInfo []map[string]interface{}
+
 	matchedRules := t.MatchedRules()
-	if len(matchedRules) > 0 {
-		// 我们只取第一个匹配的规则作为示例
-		rule := matchedRules[0]
-		logMsg := fmt.Sprintf("Rule ID: %d, Message: %s", rule.Rule().ID(), rule.Message())
-		mem.log = C.CString(logMsg)
+	for _, rule := range matchedRules {
+		ruleInfo := map[string]interface{}{
+			"id":      rule.Rule().ID(),
+			"message": rule.Message(),
+		}
+		matchedRulesInfo = append(matchedRulesInfo, ruleInfo)
+	}
+
+	// 创建一个包含所有信息的map
+	interventionInfo := map[string]interface{}{
+		"action":        interruption.Action,
+		"status":        interruption.Status,
+		"matched_rules": matchedRulesInfo,
+	}
+
+	// 将map转换为JSON字符串
+	jsonData, err := json.Marshal(interventionInfo)
+	if err != nil {
+		mem.log = C.CString(fmt.Sprintf("Error creating JSON: %v", err))
 	} else {
-		mem.log = C.CString("No specific rule information available")
+		mem.log = C.CString(string(jsonData))
 	}
 
 	return mem
