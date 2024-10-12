@@ -303,9 +303,15 @@ func coraza_free_intervention(it *C.coraza_intervention_t) C.int {
 		return 1
 	}
 	defer C.free(unsafe.Pointer(it))
-	C.free(unsafe.Pointer(it.action))
-	C.free(unsafe.Pointer(it.url))
-	C.free(unsafe.Pointer(it.log))
+	if it.action != nil {
+		C.free(unsafe.Pointer(it.action))
+	}
+	if it.url != nil {
+		C.free(unsafe.Pointer(it.url))
+	}
+	if it.log != nil {
+		C.free(unsafe.Pointer(it.log))
+	}
 	return 0
 }
 

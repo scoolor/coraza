@@ -17,4 +17,3 @@ automake --foreign --copy
 autoconf --force
 
 rm -rf autom4te.cache
-
