@@ -40,15 +40,13 @@ func main() {
 }
 
 func createWAF() coraza.WAF {
-	directivesFile := "./default.conf"
-	if s := os.Getenv("DIRECTIVES_FILE"); s != "" {
-		directivesFile = s
-	}
 
 	waf, err := coraza.NewWAF(
 		coraza.NewWAFConfig().
 			WithErrorCallback(logError).
-			WithDirectivesFromFile(directivesFile),
+			WithDirectivesFromFile("./coreruleset/coraza.conf").
+			WithDirectivesFromFile("./coreruleset/crs-setup.conf").
+			WithDirectivesFromFile("./coreruleset/rules/*.conf"),
 	)
 	if err != nil {
 		log.Fatal(err)
