@@ -115,12 +115,20 @@ func coraza_intervention(tx C.coraza_transaction_t) *C.coraza_intervention_t {
 	mem.action = C.CString(interruption.Action)
 	mem.status = C.int(interruption.Status)
 
+	matchedRules := t.MatchedRules()
+	var errorLogs []string
+	for _, rule := range matchedRules {
+		errorLogs = append(errorLogs, rule.ErrorLog())
+	}
+	errorLog, _ := json.Marshal(errorLogs)
+
 	// 创建一个包含所有信息的map
 	interventionInfo := map[string]interface{}{
-		"action":  interruption.Action,
-		"status":  interruption.Status,
-		"rule_id": interruption.RuleID,
-		"data":    interruption.Data,
+		"action":    interruption.Action,
+		"status":    interruption.Status,
+		"rule_id":   interruption.RuleID,
+		"data":      interruption.Data,
+		"error_log": errorLog,
 	}
 
 	// 将map转换为JSON字符串
