@@ -35,7 +35,6 @@ import (
 	"unsafe"
 
 	"github.com/corazawaf/coraza/v3"
-	"github.com/corazawaf/coraza/v3/internal/corazawaf"
 	"github.com/corazawaf/coraza/v3/types"
 )
 
@@ -301,12 +300,6 @@ func coraza_request_body_from_file(t C.coraza_transaction_t, file *C.char) C.int
 func coraza_free_waf(t C.coraza_waf_t) C.int {
 	delete(wafMap, uint64(t))
 	return 0
-}
-
-//export coraza_set_log_cb
-func coraza_set_log_cb(w C.coraza_waf_t, cb C.coraza_log_cb) {
-	waf := (*corazawaf.WAF)(unsafe.Pointer(w))
-	waf.ErrorLogCb = cb
 }
 
 /**
