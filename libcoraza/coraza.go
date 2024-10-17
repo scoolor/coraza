@@ -90,19 +90,6 @@ func coraza_new_transaction_with_id(waf C.coraza_waf_t, id *C.char, logCb unsafe
 }
 
 //export coraza_intervention
-// func coraza_intervention(tx C.coraza_transaction_t) *C.coraza_intervention_t {
-// 	t := ptrToTransaction(tx)
-// 	if t.Interruption() == nil {
-// 		return nil
-// 	}
-// 	mem := (*C.coraza_intervention_t)(C.malloc(C.size_t(unsafe.Sizeof(C.coraza_intervention_t{}))))
-// 	mem.action = C.CString(t.Interruption().Action)
-// 	mem.status = C.int(t.Interruption().Status)
-
-// 	return mem
-// }
-
-//export coraza_intervention
 func coraza_intervention(tx C.coraza_transaction_t) *C.coraza_intervention_t {
 	t := ptrToTransaction(tx)
 	interruption := t.Interruption()
@@ -113,30 +100,6 @@ func coraza_intervention(tx C.coraza_transaction_t) *C.coraza_intervention_t {
 	mem := (*C.coraza_intervention_t)(C.malloc(C.size_t(unsafe.Sizeof(C.coraza_intervention_t{}))))
 	mem.action = C.CString(interruption.Action)
 	mem.status = C.int(interruption.Status)
-
-	matchedRules := t.MatchedRules()
-	var errorLogs []string
-	for _, rule := range matchedRules {
-		errorLogs = append(errorLogs, rule.ErrorLog())
-	}
-	errorLog, _ := json.Marshal(errorLogs)
-
-	// 创建一个包含所有信息的map
-	interventionInfo := map[string]interface{}{
-		"action":    interruption.Action,
-		"status":    interruption.Status,
-		"rule_id":   interruption.RuleID,
-		"data":      interruption.Data,
-		"error_log": errorLog,
-	}
-
-	// 将map转换为JSON字符串
-	jsonData, err := json.Marshal(interventionInfo)
-	if err != nil {
-		mem.log = C.CString(fmt.Sprintf("Error creating JSON: %v", err))
-	} else {
-		mem.log = C.CString(string(jsonData))
-	}
 
 	return mem
 }
