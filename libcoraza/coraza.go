@@ -69,12 +69,10 @@ func coraza_new_waf() C.coraza_waf_t {
 /**
  * Creates a new transaction for a WAF instance
  * @param[in] pointer to valid WAF instance
- * @param[in] pointer to log callback, can be null
  * @returns pointer to transaction
  */
 //export coraza_new_transaction
-func coraza_new_transaction(waf C.coraza_waf_t, logCb unsafe.Pointer) C.coraza_transaction_t {
-	coraza_set_log_cb(waf, logCb)
+func coraza_new_transaction(waf C.coraza_waf_t) C.coraza_transaction_t {
 	w := ptrToWaf(waf)
 	tx := w.NewTransaction()
 	ptr := transactionToPtr(tx)
@@ -83,8 +81,7 @@ func coraza_new_transaction(waf C.coraza_waf_t, logCb unsafe.Pointer) C.coraza_t
 }
 
 //export coraza_new_transaction_with_id
-func coraza_new_transaction_with_id(waf C.coraza_waf_t, id *C.char, logCb unsafe.Pointer) C.coraza_transaction_t {
-	coraza_set_log_cb(waf, logCb)
+func coraza_new_transaction_with_id(waf C.coraza_waf_t, id *C.char) C.coraza_transaction_t {
 	w := ptrToWaf(waf)
 	tx := w.NewTransactionWithID(cStringToGoString(id))
 	ptr := transactionToPtr(tx)
