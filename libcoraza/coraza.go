@@ -32,9 +32,11 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sync"
 	"unsafe"
 
 	"github.com/corazawaf/coraza/v3"
+	"github.com/corazawaf/coraza/v3/internal/corazawaf"
 	"github.com/corazawaf/coraza/v3/types"
 )
 
@@ -121,14 +123,6 @@ func coraza_process_request_body(t C.coraza_transaction_t) C.int {
 	if _, err := tx.ProcessRequestBody(); err != nil {
 		return 1
 	}
-	return 0
-}
-
-//export coraza_update_status_code
-func coraza_update_status_code(t C.coraza_transaction_t, code C.int) C.int {
-	// tx := ptrToTransaction(t)
-	// c := strconv.Itoa(int(code))
-	// tx.Variables.ResponseStatus.Set(c)
 	return 0
 }
 
@@ -252,11 +246,6 @@ func coraza_rules_add(w C.coraza_waf_t, directives *C.char, er **C.char) C.int {
 	return 1
 }
 
-//export coraza_rules_count
-func coraza_rules_count(w C.coraza_waf_t) C.int {
-	return 0
-}
-
 //export coraza_free_transaction
 func coraza_free_transaction(t C.coraza_transaction_t) C.int {
 	tx := ptrToTransaction(t)
@@ -282,11 +271,6 @@ func coraza_free_intervention(it *C.coraza_intervention_t) C.int {
 	if it.log != nil {
 		C.free(unsafe.Pointer(it.log))
 	}
-	return 0
-}
-
-//export coraza_rules_merge
-func coraza_rules_merge(w1 C.coraza_waf_t, w2 C.coraza_waf_t, er **C.char) C.int {
 	return 0
 }
 
@@ -317,13 +301,35 @@ func coraza_request_body_from_file(t C.coraza_transaction_t, file *C.char) C.int
 
 //export coraza_free_waf
 func coraza_free_waf(t C.coraza_waf_t) C.int {
-	// waf := ptrToWaf(t)
 	delete(wafMap, uint64(t))
 	return 0
 }
 
+var (
+	logCallbackMu sync.Mutex
+	logCallbacks  map[unsafe.Pointer]C.coraza_log_cb = make(map[unsafe.Pointer]C.coraza_log_cb)
+)
+
 //export coraza_set_log_cb
-func coraza_set_log_cb(waf C.coraza_waf_t, cb C.coraza_log_cb) {
+func coraza_set_log_cb(w C.coraza_waf_t, cb C.coraza_log_cb) {
+	waf := (*corazawaf.WAF)(unsafe.Pointer(w))
+
+	logCallbackMu.Lock()
+	defer logCallbackMu.Unlock()
+
+	// Store the callback for this specific WAF instance
+	logCallbacks[unsafe.Pointer(w)] = cb
+
+	// Set the ErrorLogCb for the WAF instance
+	waf.ErrorLogCb = func(rule types.MatchedRule) {
+		message := C.CString(rule.ErrorLog())
+		defer C.free(unsafe.Pointer(message))
+
+		// Retrieve the callback for this WAF instance
+		if cb, ok := logCallbacks[unsafe.Pointer(w)]; ok {
+			C.callLogCallback(cb, message)
+		}
+	}
 }
 
 /**
@@ -385,7 +391,6 @@ func coraza_free_matched_logmsg(t *C.char) C.int {
 /*
 Internal helpers
 */
-
 func ptrToWaf(waf C.coraza_waf_t) coraza.WAF {
 	return wafMap[uint64(waf)]
 }
@@ -413,7 +418,6 @@ func intToCint(i int) C.int {
 
 // cStringToGoString converts C string to Go string without copying data to enhance performance.
 func cStringToGoString(cStr *C.char) string {
-
 	myStr := new(reflect.StringHeader)
 	// size_t strnlen(const char *s, size_t max_len);
 	cStrLen := C.strnlen(cStr, 65535) // invoke strnlen to obtain the len of cStr
