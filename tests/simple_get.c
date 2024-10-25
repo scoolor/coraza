@@ -17,13 +17,11 @@ int main()
     char ** uri = NULL;
 
     printf("Starting...\n");
-    waf = coraza_new_waf(NULL);
+    waf = coraza_new_waf();
     if (waf == 0) {
         printf("Failed to create waf\n");
         return 1;
     }
-    printf("Attaching log callback\n");
-    coraza_set_log_cb(waf, logcb);
 
     printf("Compiling rules...\n");
     coraza_rules_add(waf, "SecRule REMOTE_ADDR \"127.0.0.1\" \"id:1,phase:1,deny,log,msg:'test 123',status:403\"", &err);
@@ -32,7 +30,6 @@ int main()
         return 1;
     }
 
-    printf("%d rules compiled\n", coraza_rules_count(waf));
     printf("Creating transaction...\n");
     tx = coraza_new_transaction(waf);
     if(tx == 0) {
