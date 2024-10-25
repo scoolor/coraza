@@ -118,14 +118,6 @@ func coraza_process_request_body(t C.coraza_transaction_t) C.int {
 	return 0
 }
 
-//export coraza_update_status_code
-func coraza_update_status_code(t C.coraza_transaction_t, code C.int) C.int {
-	// tx := ptrToTransaction(t)
-	// c := strconv.Itoa(int(code))
-	// tx.Variables.ResponseStatus.Set(c)
-	return 0
-}
-
 //export coraza_process_uri
 func coraza_process_uri(t C.coraza_transaction_t, uri *C.char, method *C.char, proto *C.char) C.int {
 	tx := ptrToTransaction(t)
@@ -244,11 +236,6 @@ func coraza_rules_add(w C.coraza_waf_t, directives *C.char, er **C.char) C.int {
 	return 1
 }
 
-//export coraza_rules_count
-func coraza_rules_count(w C.coraza_waf_t) C.int {
-	return 0
-}
-
 //export coraza_free_transaction
 func coraza_free_transaction(t C.coraza_transaction_t) C.int {
 	tx := ptrToTransaction(t)
@@ -274,11 +261,6 @@ func coraza_free_intervention(it *C.coraza_intervention_t) C.int {
 	if it.log != nil {
 		C.free(unsafe.Pointer(it.log))
 	}
-	return 0
-}
-
-//export coraza_rules_merge
-func coraza_rules_merge(w1 C.coraza_waf_t, w2 C.coraza_waf_t, er **C.char) C.int {
 	return 0
 }
 
