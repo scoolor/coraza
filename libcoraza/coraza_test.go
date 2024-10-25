@@ -12,8 +12,16 @@ var waf *coraza.WAF
 var wafPtr uint64
 
 func TestWafInitialization(t *testing.T) {
-	waf2 := coraza_new_waf()
-	wafPtr = uint64(waf2)
+	// 创建新的 WAF 实例，不使用日志回调
+	waf := coraza_new_waf(nil)
+
+	// 检查 WAF 实例是否成功创建
+	if waf == 0 {
+		t.Fatal("Failed to create WAF instance")
+	}
+
+	// 存储 WAF 指针
+	wafPtr = uint64(waf)
 }
 
 func TestStringToC(t *testing.T) {
@@ -30,12 +38,12 @@ func TestWafIsConsistent(t *testing.T) {
 }
 
 func TestTransactionInitialization(t *testing.T) {
-	waf := coraza_new_waf()
-	tt := coraza_new_transaction(waf, nil)
+	waf := coraza_new_waf(nil)
+	tt := coraza_new_transaction(waf)
 	if tt == 0 {
 		t.Fatal("Transaction initialization failed")
 	}
-	t2 := coraza_new_transaction(waf, nil)
+	t2 := coraza_new_transaction(waf)
 	if t2 == tt {
 		t.Fatal("Transactions are duplicated")
 	}
@@ -44,8 +52,8 @@ func TestTransactionInitialization(t *testing.T) {
 }
 
 func TestTxCleaning(t *testing.T) {
-	waf := coraza_new_waf()
-	txPtr := coraza_new_transaction(waf, nil)
+	waf := coraza_new_waf(nil)
+	txPtr := coraza_new_transaction(waf)
 	coraza_free_transaction(txPtr)
 	if _, ok := txMap[uint64(txPtr)]; ok {
 		t.Fatal("Transaction was not removed from the map")
@@ -63,14 +71,13 @@ func TestMyCtostring(t *testing.T) {
 
 // nolint
 func TestCoraza_rules_add_file(t *testing.T) {
-
 	er := stringToC("a")
-	waf := coraza_new_waf()
+	waf := coraza_new_waf(nil)
 	coraza_rules_add_file(waf, stringToC(`coraza.conf`), &er)
 	coraza_rules_add_file(waf, stringToC(`../coreruleset/crs-setup.conf.example`), &er)
 	coraza_rules_add(waf, stringToC(`SecRule REQUEST_HEADERS:User-Agent "Mozilla" "phase:1, id:3,drop,status:403,log,msg:'Blocked User-Agent'"`), &er)
 	coraza_rules_add(waf, stringToC(`Include ../coreruleset/rules/*.conf`), &er)
-	tt := coraza_new_transaction(waf, nil)
+	tt := coraza_new_transaction(waf)
 	if tt == 0 {
 		t.Fatal("Transaction initialization failed")
 	}
@@ -94,11 +101,10 @@ func TestCoraza_rules_add_file(t *testing.T) {
 
 // nolint
 func TestCoraza_rules_add(t *testing.T) {
-
 	er := stringToC("a")
-	waf := coraza_new_waf()
+	waf := coraza_new_waf(nil)
 	coraza_rules_add(waf, stringToC(`SecRule REQUEST_HEADERS:User-Agent "Mozilla" "phase:1, id:3,drop,status:403,log,msg:'Blocked User-Agent'"`), &er)
-	tt := coraza_new_transaction(waf, nil)
+	tt := coraza_new_transaction(waf)
 	if tt == 0 {
 		t.Fatal("Transaction initialization failed")
 	}
@@ -131,18 +137,18 @@ func TestMyCtostringN(t *testing.T) {
 }
 
 func BenchmarkTransactionCreation(b *testing.B) {
-	waf := coraza_new_waf()
+	waf := coraza_new_waf(nil)
 	for i := 0; i < b.N; i++ {
-		coraza_new_transaction(waf, nil)
+		coraza_new_transaction(waf)
 	}
 }
 
 // nolint
 func BenchmarkTransactionProcessing(b *testing.B) {
-	waf := coraza_new_waf()
+	waf := coraza_new_waf(nil)
 	coraza_rules_add(waf, stringToC(`SecRule UNIQUE_ID "" "id:1"`), nil)
 	for i := 0; i < b.N; i++ {
-		txPtr := coraza_new_transaction(waf, nil)
+		txPtr := coraza_new_transaction(waf)
 		tx := ptrToTransaction(txPtr)
 		tx.ProcessConnection("127.0.0.1", 55555, "127.0.0.1", 80)
 		tx.ProcessURI("https://www.example.com/some?params=123", "GET", "HTTP/1.1")

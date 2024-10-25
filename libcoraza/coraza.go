@@ -32,11 +32,9 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"sync"
 	"unsafe"
 
 	"github.com/corazawaf/coraza/v3"
-	"github.com/corazawaf/coraza/v3/internal/corazawaf"
 	"github.com/corazawaf/coraza/v3/types"
 )
 
@@ -60,21 +58,38 @@ type MessageData struct {
  * @returns pointer to WAF instance
  */
 //export coraza_new_waf
-func coraza_new_waf() C.coraza_waf_t {
-	waf, _ := coraza.NewWAF(coraza.NewWAFConfig())
+func coraza_new_waf(logCb unsafe.Pointer) C.coraza_waf_t {
+	var goLogCallback func(types.MatchedRule)
+	if logCb != nil {
+		cLogCb := (*[0]byte)(logCb)
+		goLogCallback = func(mr types.MatchedRule) {
+			// 将 MatchedRule 转换为字符串
+			msg := formatMatchedRule(mr)
+			cMsg := C.CString(msg)
+			defer C.free(unsafe.Pointer(cMsg))
+			C.send_log_to_cb(cLogCb, cMsg)
+		}
+	}
+
+	waf, err := coraza.NewWAF(coraza.NewWAFConfig().
+		WithErrorCallback(goLogCallback))
+	if err != nil {
+		// 处理错误，可能需要返回一个特殊值表示失败
+		return C.coraza_waf_t(0)
+	}
+
 	ptr := wafToPtr(waf)
 	wafMap[ptr] = waf
 	return C.coraza_waf_t(ptr)
 }
 
-/**
- * Creates a new transaction for a WAF instance
- * @param[in] pointer to valid WAF instance
- * @param[in] pointer to log callback, can be null
- * @returns pointer to transaction
- */
+// formatMatchedRule 将 MatchedRule 转换为字符串
+func formatMatchedRule(mr types.MatchedRule) string {
+	return fmt.Sprintf("Rule ID: %d, Message: %s", mr.Rule().ID(), mr.Message())
+}
+
 //export coraza_new_transaction
-func coraza_new_transaction(waf C.coraza_waf_t, logCb unsafe.Pointer) C.coraza_transaction_t {
+func coraza_new_transaction(waf C.coraza_waf_t) C.coraza_transaction_t {
 	w := ptrToWaf(waf)
 	tx := w.NewTransaction()
 	ptr := transactionToPtr(tx)
@@ -83,7 +98,7 @@ func coraza_new_transaction(waf C.coraza_waf_t, logCb unsafe.Pointer) C.coraza_t
 }
 
 //export coraza_new_transaction_with_id
-func coraza_new_transaction_with_id(waf C.coraza_waf_t, id *C.char, logCb unsafe.Pointer) C.coraza_transaction_t {
+func coraza_new_transaction_with_id(waf C.coraza_waf_t, id *C.char) C.coraza_transaction_t {
 	w := ptrToWaf(waf)
 	tx := w.NewTransactionWithID(cStringToGoString(id))
 	ptr := transactionToPtr(tx)
@@ -127,7 +142,7 @@ func coraza_process_request_body(t C.coraza_transaction_t) C.int {
 }
 
 // msr->t, r->unparsed_uri, r->method, r->protocol + offset
-//
+
 //export coraza_process_uri
 func coraza_process_uri(t C.coraza_transaction_t, uri *C.char, method *C.char, proto *C.char) C.int {
 	tx := ptrToTransaction(t)
@@ -303,33 +318,6 @@ func coraza_request_body_from_file(t C.coraza_transaction_t, file *C.char) C.int
 func coraza_free_waf(t C.coraza_waf_t) C.int {
 	delete(wafMap, uint64(t))
 	return 0
-}
-
-var (
-	logCallbackMu sync.Mutex
-	logCallbacks  map[unsafe.Pointer]C.coraza_log_cb = make(map[unsafe.Pointer]C.coraza_log_cb)
-)
-
-//export coraza_set_log_cb
-func coraza_set_log_cb(w C.coraza_waf_t, cb C.coraza_log_cb) {
-	waf := (*corazawaf.WAF)(unsafe.Pointer(w))
-
-	logCallbackMu.Lock()
-	defer logCallbackMu.Unlock()
-
-	// Store the callback for this specific WAF instance
-	logCallbacks[unsafe.Pointer(w)] = cb
-
-	// Set the ErrorLogCb for the WAF instance
-	waf.ErrorLogCb = func(rule types.MatchedRule) {
-		message := C.CString(rule.ErrorLog())
-		defer C.free(unsafe.Pointer(message))
-
-		// Retrieve the callback for this WAF instance
-		if cb, ok := logCallbacks[unsafe.Pointer(w)]; ok {
-			C.callLogCallback(cb, message)
-		}
-	}
 }
 
 /**
