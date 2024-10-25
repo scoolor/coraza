@@ -65,14 +65,8 @@ func coraza_new_waf() C.coraza_waf_t {
 	return C.coraza_waf_t(ptr)
 }
 
-/**
- * Creates a new transaction for a WAF instance
- * @param[in] pointer to valid WAF instance
- * @param[in] pointer to log callback, can be null
- * @returns pointer to transaction
- */
 //export coraza_new_transaction
-func coraza_new_transaction(waf C.coraza_waf_t, logCb unsafe.Pointer) C.coraza_transaction_t {
+func coraza_new_transaction(waf C.coraza_waf_t) C.coraza_transaction_t {
 	w := ptrToWaf(waf)
 	tx := w.NewTransaction()
 	ptr := transactionToPtr(tx)
@@ -81,7 +75,7 @@ func coraza_new_transaction(waf C.coraza_waf_t, logCb unsafe.Pointer) C.coraza_t
 }
 
 //export coraza_new_transaction_with_id
-func coraza_new_transaction_with_id(waf C.coraza_waf_t, id *C.char, logCb unsafe.Pointer) C.coraza_transaction_t {
+func coraza_new_transaction_with_id(waf C.coraza_waf_t, id *C.char) C.coraza_transaction_t {
 	w := ptrToWaf(waf)
 	tx := w.NewTransactionWithID(cStringToGoString(id))
 	ptr := transactionToPtr(tx)
@@ -132,8 +126,6 @@ func coraza_update_status_code(t C.coraza_transaction_t, code C.int) C.int {
 	return 0
 }
 
-// msr->t, r->unparsed_uri, r->method, r->protocol + offset
-//
 //export coraza_process_uri
 func coraza_process_uri(t C.coraza_transaction_t, uri *C.char, method *C.char, proto *C.char) C.int {
 	tx := ptrToTransaction(t)
@@ -320,10 +312,6 @@ func coraza_free_waf(t C.coraza_waf_t) C.int {
 	// waf := ptrToWaf(t)
 	delete(wafMap, uint64(t))
 	return 0
-}
-
-//export coraza_set_log_cb
-func coraza_set_log_cb(waf C.coraza_waf_t, cb C.coraza_log_cb) {
 }
 
 /**

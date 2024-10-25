@@ -31,11 +31,11 @@ func TestWafIsConsistent(t *testing.T) {
 
 func TestTransactionInitialization(t *testing.T) {
 	waf := coraza_new_waf()
-	tt := coraza_new_transaction(waf, nil)
+	tt := coraza_new_transaction(waf)
 	if tt == 0 {
 		t.Fatal("Transaction initialization failed")
 	}
-	t2 := coraza_new_transaction(waf, nil)
+	t2 := coraza_new_transaction(waf)
 	if t2 == tt {
 		t.Fatal("Transactions are duplicated")
 	}
@@ -45,7 +45,7 @@ func TestTransactionInitialization(t *testing.T) {
 
 func TestTxCleaning(t *testing.T) {
 	waf := coraza_new_waf()
-	txPtr := coraza_new_transaction(waf, nil)
+	txPtr := coraza_new_transaction(waf)
 	coraza_free_transaction(txPtr)
 	if _, ok := txMap[uint64(txPtr)]; ok {
 		t.Fatal("Transaction was not removed from the map")
@@ -70,7 +70,7 @@ func TestCoraza_rules_add_file(t *testing.T) {
 	coraza_rules_add_file(waf, stringToC(`../coreruleset/crs-setup.conf.example`), &er)
 	coraza_rules_add(waf, stringToC(`SecRule REQUEST_HEADERS:User-Agent "Mozilla" "phase:1, id:3,drop,status:403,log,msg:'Blocked User-Agent'"`), &er)
 	coraza_rules_add(waf, stringToC(`Include ../coreruleset/rules/*.conf`), &er)
-	tt := coraza_new_transaction(waf, nil)
+	tt := coraza_new_transaction(waf)
 	if tt == 0 {
 		t.Fatal("Transaction initialization failed")
 	}
@@ -98,7 +98,7 @@ func TestCoraza_rules_add(t *testing.T) {
 	er := stringToC("a")
 	waf := coraza_new_waf()
 	coraza_rules_add(waf, stringToC(`SecRule REQUEST_HEADERS:User-Agent "Mozilla" "phase:1, id:3,drop,status:403,log,msg:'Blocked User-Agent'"`), &er)
-	tt := coraza_new_transaction(waf, nil)
+	tt := coraza_new_transaction(waf)
 	if tt == 0 {
 		t.Fatal("Transaction initialization failed")
 	}
@@ -133,7 +133,7 @@ func TestMyCtostringN(t *testing.T) {
 func BenchmarkTransactionCreation(b *testing.B) {
 	waf := coraza_new_waf()
 	for i := 0; i < b.N; i++ {
-		coraza_new_transaction(waf, nil)
+		coraza_new_transaction(waf)
 	}
 }
 
@@ -142,7 +142,7 @@ func BenchmarkTransactionProcessing(b *testing.B) {
 	waf := coraza_new_waf()
 	coraza_rules_add(waf, stringToC(`SecRule UNIQUE_ID "" "id:1"`), nil)
 	for i := 0; i < b.N; i++ {
-		txPtr := coraza_new_transaction(waf, nil)
+		txPtr := coraza_new_transaction(waf)
 		tx := ptrToTransaction(txPtr)
 		tx.ProcessConnection("127.0.0.1", 55555, "127.0.0.1", 80)
 		tx.ProcessURI("https://www.example.com/some?params=123", "GET", "HTTP/1.1")
