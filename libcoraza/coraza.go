@@ -307,12 +307,13 @@ func coraza_get_matched_logmsg(t C.coraza_transaction_t) *C.char {
 
 	// Open debug log file
 	debugFile, err := os.OpenFile("/tmp/a.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	var debugLog *log.Logger
 	if err != nil {
 		log.Println("Error opening debug log file:", err)
 	} else {
 		defer debugFile.Close()
+		debugLog = log.New(debugFile, "", log.LstdFlags)
 	}
-	debugLog := log.New(debugFile, "", log.LstdFlags)
 
 	// we need to build a json object with the matched rules
 	// and the corresponding data
@@ -322,7 +323,7 @@ func coraza_get_matched_logmsg(t C.coraza_transaction_t) *C.char {
 		r := mr.Rule()
 
 		// Write debug information to /tmp/a.log
-		if debugFile != nil {
+		if debugLog != nil {
 			debugLog.Printf("--- Matched Rule Debug Info ---\n")
 			debugLog.Printf("Rule: %d\n", r.ID())
 			debugLog.Printf("Message: %s\n", mr.Message())
