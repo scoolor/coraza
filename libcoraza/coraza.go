@@ -325,7 +325,7 @@ func coraza_get_matched_logmsg(t C.coraza_transaction_t) *C.char {
 		// Write debug information to /tmp/a.log
 		if debugLog != nil {
 			debugLog.Printf("--- Matched Rule Debug Info ---\n")
-			debugLog.Printf("Rule: %d\n", r.ID())
+			debugLog.Printf("Rule ID: %d\n", r.ID())
 			debugLog.Printf("Message: %s\n", mr.Message())
 			debugLog.Printf("Data: %v\n", mr.Data())
 			debugLog.Printf("Disruptive: %v\n", mr.Disruptive())
@@ -333,7 +333,7 @@ func coraza_get_matched_logmsg(t C.coraza_transaction_t) *C.char {
 			debugLog.Printf("Audit Log: %s\n", mr.AuditLog())
 			debugLog.Printf("Matched Datas:\n")
 			for _, md := range mr.MatchedDatas() {
-				debugLog.Printf("  - Key: %s, Value: %s\n", md.Key(), md.Value())
+				debugLog.Printf("  - Key: %s, Value: %s, Message: %s, Data: %s\n", md.Key(), md.Value(), md.Message(), md.Data())
 			}
 			debugLog.Printf("-----------------------------\n\n")
 		}
