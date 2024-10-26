@@ -30,7 +30,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"reflect"
 	"unsafe"
@@ -305,38 +304,16 @@ func coraza_get_matched_logmsg(t C.coraza_transaction_t) *C.char {
 		return C.CString("")
 	}
 
-	// Open debug log file
-	debugFile, err := os.OpenFile("/tmp/a.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	var debugLog *log.Logger
-	if err != nil {
-		log.Println("Error opening debug log file:", err)
-	} else {
-		defer debugFile.Close()
-		debugLog = log.New(debugFile, "", log.LstdFlags)
-	}
-
 	// we need to build a json object with the matched rules
 	// and the corresponding data
-	var logData []byte
+	var (
+		logData []byte
+		err     error
+	)
+
 	message := make([]MessageData, 0)
 	for _, mr := range tx.MatchedRules() {
 		r := mr.Rule()
-
-		// Write debug information to /tmp/a.log
-		if debugLog != nil {
-			debugLog.Printf("--- Matched Rule Debug Info ---\n")
-			debugLog.Printf("Rule ID: %d\n", r.ID())
-			debugLog.Printf("Message: %s\n", mr.Message())
-			debugLog.Printf("Data: %v\n", mr.Data())
-			debugLog.Printf("Disruptive: %v\n", mr.Disruptive())
-			debugLog.Printf("Error Log: %s\n", mr.ErrorLog())
-			debugLog.Printf("Audit Log: %s\n", mr.AuditLog())
-			debugLog.Printf("Matched Datas:\n")
-			for _, md := range mr.MatchedDatas() {
-				debugLog.Printf("  - Key: %s, Value: %s, Message: %s, Data: %s\n", md.Key(), md.Value(), md.Message(), md.Data())
-			}
-			debugLog.Printf("-----------------------------\n\n")
-		}
 
 		matchData := make([]string, 0, 10)
 		for _, i := range mr.MatchedDatas() {
@@ -406,7 +383,6 @@ func intToCint(i int) C.int {
 
 // cStringToGoString converts C string to Go string without copying data to enhance performance.
 func cStringToGoString(cStr *C.char) string {
-
 	myStr := new(reflect.StringHeader)
 	// size_t strnlen(const char *s, size_t max_len);
 	cStrLen := C.strnlen(cStr, 65535) // invoke strnlen to obtain the len of cStr
