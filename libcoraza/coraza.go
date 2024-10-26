@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"reflect"
 	"unsafe"
@@ -53,10 +54,6 @@ type MessageData struct {
 	Tags_     []string           `json:"tags"`
 }
 
-/**
- * Creates a new  WAF instance
- * @returns pointer to WAF instance
- */
 //export coraza_new_waf
 func coraza_new_waf() C.coraza_waf_t {
 	waf, _ := coraza.NewWAF(coraza.NewWAFConfig())
@@ -307,13 +304,38 @@ func coraza_get_matched_logmsg(t C.coraza_transaction_t) *C.char {
 	if len(tx.MatchedRules()) == 0 {
 		return C.CString("")
 	}
+
+	// Open debug log file
+	debugFile, err := os.OpenFile("/tmp/a.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println("Error opening debug log file:", err)
+	} else {
+		defer debugFile.Close()
+	}
+	debugLog := log.New(debugFile, "", log.LstdFlags)
+
 	// we need to build a json object with the matched rules
 	// and the corresponding data
 	var logData []byte
-	var err error
 	message := make([]MessageData, 0)
 	for _, mr := range tx.MatchedRules() {
 		r := mr.Rule()
+
+		// Write debug information to /tmp/a.log
+		if debugFile != nil {
+			debugLog.Printf("--- Matched Rule Debug Info ---\n")
+			debugLog.Printf("Rule: %d\n", r.ID())
+			debugLog.Printf("Message: %s\n", mr.Message())
+			debugLog.Printf("Data: %v\n", mr.Data())
+			debugLog.Printf("Disruptive: %v\n", mr.Disruptive())
+			debugLog.Printf("Error Log: %s\n", mr.ErrorLog())
+			debugLog.Printf("Audit Log: %s\n", mr.AuditLog())
+			debugLog.Printf("Matched Datas:\n")
+			for _, md := range mr.MatchedDatas() {
+				debugLog.Printf("  - Key: %s, Value: %s\n", md.Key(), md.Value())
+			}
+			debugLog.Printf("-----------------------------\n\n")
+		}
 
 		matchData := make([]string, 0, 10)
 		for _, i := range mr.MatchedDatas() {
